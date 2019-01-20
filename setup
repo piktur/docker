@@ -1,0 +1,20 @@
+#!/bin/bash
+
+bin=/usr/local/bin
+src="$(cd $(dirname "$BASH_SOURCE"); echo $PWD/bin/postgres)"
+commands=(pg_ctl pg_dump pg_restore postgres postgresql psql)
+
+chmod +x $src
+
+echo "Installing PostgreSQL executables:"
+for cmd in "${commands[@]}";
+do
+  dest="$bin/$cmd"
+
+  echo "  - $dest"
+
+  ln -s "$src" "$dest"
+  chmod +x "$dest"
+done
+
+exit $?
