@@ -1,0 +1,40 @@
+#!/bin/bash
+
+export PG_MAJOR=${PG_MAJOR:-9.4}
+
+proc=$(docker ps --filter status=running --filter ancestor=postgres:$PG_MAJOR --format '{{.Names}}')
+cmd=( )
+
+if [ $proc ]; then
+  while getopts :h:p:U: opt; do
+    case "$opt" in
+      h) shift 2; h="$OPTARG" ;;
+      p) shift 2; p="$OPTARG" ;;
+      U) shift 2; U="$OPTARG" ;;
+    esac
+  done
+
+  case $(basename "$0") in
+    pg_ctl)
+      # Use `gosu` (`sudo` not installed) to login as the (unprivileged) user `postgres`;
+      # the owner of the docker process.
+      cmd+=( gosu postgres pg_ctl ) ;;
+    pg_dump)
+      cmd+=( pg_dump ) ;;
+    pg_restore)
+      cmd+=( pg_restore ) ;;
+    'postgres'|'postgresql')
+      cmd+=( postgres ) ;;
+    psql)
+      cmd+=( psql -h "${h:-localhost}" -p "${p:-5432}" -U "${U:-postgres}" ) ;;
+    *)
+      echo $'\e[1;31m'"bash: command \`$(basename $0)\` not found."$'\e[0m'; exit 1 ;;
+  esac
+
+
+  cmd+=( "$@" ) # Add remaing args
+
+  docker exec --interactive --tty "$proc" "${cmd[@]}"; exit $?
+else
+  echo $'\e[1;33m'"Docker service \`$proc\` is not running."$'\e[0m'; exit 1
+fi
