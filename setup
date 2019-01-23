@@ -2,7 +2,7 @@
 
 bin=/usr/local/bin
 src="$(cd $(dirname "$BASH_SOURCE"); echo $PWD/bin/postgres)"
-commands=(pg_ctl pg_dump pg_restore postgres postgresql psql)
+commands=(createdb dropdb pg_ctl pg_dump pg_restore postgres postgresql psql)
 
 chmod +x $src
 
