@@ -29,6 +29,6 @@ Temporary Items
 /pkg/
 /tmp/
 
-.env.*
+.env*
 
-volumes
+/volumes/
