@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# @example Run PostgreSQL instance within a Docker container
+#   bin/postgres [OPTIONS] [ARGS]
+#   PG_MAJOR=9.6 bin/postgres
+#
+# @see https://docs.docker.com/engine/reference/commandline/run/
+
+service=postgres
+context=$HOME/docker/$service
+
+source $context/.env
+
 export PG_MAJOR=${PG_MAJOR:-9.4}
 
 proc=$(docker ps --filter status=running --filter ancestor=postgres:$PG_MAJOR --format '{{.Names}}')
@@ -34,11 +45,50 @@ if [ $proc ]; then
       echo $'\e[1;31m'"bash: command \`$cmd\` not found."$'\e[0m'; exit 1 ;;
   esac
 
-
   arg+=( "$@" ) # Add remaing args
 
   docker exec --interactive --tty "$proc" "${arg[@]}"; exit $?
 else
   echo $'\e[1;33m'"Docker service \`$proc\` is not running."$'\e[0m';
-  exit 1
+
+  # Build and tag the Docker image unless an image with matching tag exists.
+  if [[ "$(docker images --filter=reference="$service*:$PG_MAJOR*" --quiet 2> /dev/null)" == "" ]]; then
+    echo "[Docker] Building image $PG_MAJOR"
+
+    docker build --rm --tag "$service:$PG_MAJOR" $context/$PG_MAJOR
+  fi
+
+  # @note A bind mount will be created between the host machine and the container. Databases and
+  #   configuration generated within the container will be preserved beyond the life of the container.
+  #
+  #   Volumes will be namespaced by `PG_MAJOR`
+  host_volume=$HOME/docker/volumes/$service/$PG_MAJOR/data
+  init=docker-entrypoint-initdb.d
+
+  # @todo accept additional --env-file
+  #
+  # @note **IMPORTANT** Until I devise a better strategy, we're using the container name to identify
+  #   running instances. Containers SHOULD be named as `<service>-<major>`.
+  #
+  # @note **IMPORTANT** In order to connect to the container from the host machine (your machine)
+  #   you **MUST** use `--publish 5432:5342`.
+  #
+  #   `--publish` maps container port `5432` to `0.0.0.0:5432` on the host. The use of `EXPOSE` within
+  #   the Dockerfile does not map to the host's localhost address, unless I'm missing something?
+  #
+  # @see https://docs.docker.com/docker-for-mac/#i-cannot-ping-my-containers
+  # @see https://github.com/moby/moby/issues/22753#issuecomment-222943352
+  # @see https://stackoverflow.com/questions/39216830/how-could-i-ping-my-docker-container-from-my-host
+  docker run --name "postgres-$PG_MAJOR" \
+    --rm \
+    --tty \
+    --detach \
+    --publish 5432:5432 \
+    --env-file "$context/.env" \
+    --volume "$host_volume:/var/lib/postgresql/data" \
+    --volume "$context/$init:/$init" \
+    --volume "$context/volumes/postgres/$PG_MAJOR/tmp:/tmp/postgres" \
+    "$service:$PG_MAJOR" $*
+
+  exit $?
 fi
